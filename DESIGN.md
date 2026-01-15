@@ -125,6 +125,8 @@ Read requests are always served from the cache and never trigger direct Kubernet
 
 The system is intentionally eventually consistent, which is acceptable for this use case.
 
+Write operations are sent directly to the Kubernetes API and do not rely on cached state. As a result, stale cache data does not typically affect updates. If concurrent modifications occur and the Kubernetes API returns a conflict (e.g., due to a resource version mismatch), the error is surfaced to the caller rather than being retried automatically. This keeps update behavior explicit and consistent with Kubernetes API semantics.
+
 ### 5.3 Pod Lifecycle
 
 Updating spec.replicas triggers the Kubernetes Deployment controller to reconcile the desired state by managing underlying ReplicaSets.
@@ -141,6 +143,8 @@ All API endpoints are secured using mutual TLS (mTLS).
 The server presents a certificate signed by an internal Certificate Authority (CA), and clients must present a certificate issued by the same CA. Certificate verification is enforced at the TLS connection layer.
 
 Client certificate identity may optionally be used for authorization decisions (e.g., validating the certificate subject), though fine-grained RBAC is out of scope for the initial implementation.
+
+The server enforces a minimum TLS version of 1.2, allowing TLS 1.2 and TLS 1.3 connections. TLS 1.3 cipher suites are selected by Go’s standard library. For TLS 1.2, the service relies on Go’s secure default cipher suite selection.
 
 ### 6.2 Secret Management
 
@@ -173,12 +177,14 @@ The project requires the following tools:
 
 Local development and testing are driven through Makefile targets:
 
+```bash
 make kind-up          # Create a local Kubernetes cluster
 make build            # Build the Go binary
 make docker-build     # Build the container image
 make deploy           # Deploy the service via Helm
 make test             # Run unit tests
 make integration-test # Run integration tests against the local cluster
+```
 
 ### 7.3 Fresh Clone Experience
 
@@ -194,11 +200,13 @@ From a fresh clone, a developer should be able to:
 
 Build, packaging, deployment, and testing are automated via Makefile targets:
 
+```bash
 make build              Builds the local Go binary
 make docker-build       Builds the container image
 make docker-push        Pushes the image to a registry (local KIND or GHCR)
 make deploy             Installs or upgrades the service using Helm
 make integration-test   Executes integration tests against the local cluster
+```
 
 ### 8.2 CI Pipeline (Optional)
 
@@ -224,6 +232,8 @@ Included Kubernetes resources:
 The Deployment is configured to use a rolling update strategy with maxUnavailable set to 0 and maxSurge set to 1 to avoid service disruption during upgrades.
 
 Helm upgrades are expected to complete without API downtime.
+
+For this rolling update strategy to work correctly, the service must handle pod lifecycle events cooperatively. On shutdown, the server handles SIGTERM by stopping acceptance of new requests and allowing in-flight requests to complete before exiting within the termination grace period. Readiness probes are used to ensure traffic is only routed to fully initialized pods during upgrades, while liveness probes act as a safety mechanism to restart unhealthy pods.
 
 ### Configuration
 
