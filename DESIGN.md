@@ -216,6 +216,8 @@ A lightweight CI pipeline may include:
 - Container image build
 - Integration tests executed against an ephemeral KIND cluster
 
+Note: CI is out of scope for the challenge implementation and is included for completeness only.
+
 ## 9. Helm Chart
 The service is packaged and deployed using a configurable Helm chart.
 
