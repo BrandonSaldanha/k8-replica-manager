@@ -9,12 +9,12 @@ type Config struct {
 	ListenAddr string
 	Namespace  string
 
-	// TLS file paths (wired in PR4)
+	// TLS file paths (wired in later PR)
 	TLSCertFile string
 	TLSKeyFile  string
 	CACertFile  string
 
-	// Whether to run with TLS enabled (PR4 will enforce mTLS when true)
+	// Whether to run with TLS enabled (Later PR will enforce mTLS when true)
 	TLSEnabled bool
 }
 

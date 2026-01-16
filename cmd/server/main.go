@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/BrandonSaldanha/k8s-replica-manager/internal/api"
-	"github.com/BrandonSaldanha/k8s-replica-manager/internal/config"
+	"github.com/BrandonSaldanha/k8-replica-manager/internal/api"
+	"github.com/BrandonSaldanha/k8-replica-manager/internal/config"
 )
 
 func main() {

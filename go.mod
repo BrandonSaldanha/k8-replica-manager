@@ -1,3 +1,3 @@
-module github.com/BrandonSaldanha/k8s-replica-manager
+module github.com/BrandonSaldanha/k8-replica-manager
 
-go 1.25.5
+go 1.22

@@ -15,7 +15,7 @@ Optional (for later PRs):
 - kubectl
 - Helm
 
-Linux users may need a C toolchain installed (e.g. `build-essential`) (sudo apt install -y build-essential).
+Linux users may need a C toolchain installed (e.g. sudo apt install -y build-essential).
 
 ## Quickstart
 

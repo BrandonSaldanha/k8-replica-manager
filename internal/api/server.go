@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/BrandonSaldanha/k8s-replica-manager/internal/config"
+	"github.com/BrandonSaldanha/k8-replica-manager/internal/config"
 )
 
 type Server struct {
@@ -19,7 +19,7 @@ type Server struct {
 func New(cfg config.Config) *Server {
 	mux := http.NewServeMux()
 
-	// Minimal endpoints for PR1. Business endpoints come later.
+	// PR1: only /healthz. API routes land in later PRs.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status": "ok",
