@@ -1,0 +1,10 @@
+/bin/
+/dist/
+/.coverage/
+/*.test
+.DS_Store
+.idea/
+.vscode/
+
+# kind / kube local artifacts
+*.kubeconfig
