@@ -11,11 +11,13 @@ import (
 	"github.com/BrandonSaldanha/k8-replica-manager/internal/config"
 )
 
+// Server wraps an HTTP server and exposes lifecycle helpers for starting and shutting down.
 type Server struct {
 	cfg config.Config
 	srv *http.Server
 }
 
+// New constructs a Server with routes registered.
 func New(cfg config.Config) *Server {
 	mux := http.NewServeMux()
 
@@ -38,6 +40,7 @@ func New(cfg config.Config) *Server {
 	}
 }
 
+// Start begins serving HTTP requests and blocks until the server stops.
 func (s *Server) Start() error {
 	ln, err := net.Listen("tcp", s.cfg.ListenAddr)
 	if err != nil {
@@ -50,6 +53,7 @@ func (s *Server) Start() error {
 	return s.srv.Serve(ln)
 }
 
+// Shutdown gracefully stops the server.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.srv.Shutdown(ctx)
 }

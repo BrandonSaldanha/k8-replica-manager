@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// Config holds runtime configuration for the service.
 type Config struct {
 	ListenAddr string
 	Namespace  string
@@ -18,6 +19,7 @@ type Config struct {
 	TLSEnabled bool
 }
 
+// Load builds a Config from defaults, environment variables, and flags.
 func Load() Config {
 	cfg := Config{
 		ListenAddr: ":8080",
