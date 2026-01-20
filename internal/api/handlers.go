@@ -47,7 +47,6 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Ping is optional so unit tests can provide a lightweight Store implementation.
-	// Ping is optional so unit tests can provide a lightweight Store implementation.
 	if pinger, ok := s.store.(interface{ Ping(context.Context) error }); ok {
 		if err := pinger.Ping(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
