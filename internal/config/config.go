@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"os"
+	"strconv"
 )
 
 // Config holds runtime configuration for the service.
@@ -42,8 +43,10 @@ func Load() Config {
 	if v := os.Getenv("CA_CERT_FILE"); v != "" {
 		cfg.CACertFile = v
 	}
-	if v := os.Getenv("TLS_ENABLED"); v == "1" || v == "true" || v == "TRUE" {
-		cfg.TLSEnabled = true
+	if v := os.Getenv("TLS_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.TLSEnabled = b
+		}
 	}
 
 	flag.StringVar(&cfg.ListenAddr, "listen-addr", cfg.ListenAddr, "address to listen on (env: LISTEN_ADDR)")

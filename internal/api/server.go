@@ -9,35 +9,39 @@ import (
 	"time"
 
 	"github.com/BrandonSaldanha/k8-replica-manager/internal/config"
+	"github.com/BrandonSaldanha/k8-replica-manager/internal/kube"
 )
 
 // Server wraps an HTTP server and exposes lifecycle helpers for starting and shutting down.
 type Server struct {
 	cfg config.Config
 	srv *http.Server
+	store kube.Store
 }
 
 // New constructs a Server with routes registered.
-func New(cfg config.Config) *Server {
+func New(cfg config.Config, store kube.Store) *Server {
 	mux := http.NewServeMux()
 
-	// PR1: only /healthz. API routes land in later PRs.
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"status": "ok",
-		})
-	})
+	s := &Server{
+		cfg:   cfg,
+		store: store,
+	}
 
-	s := &http.Server{
+	// Health endpoints.
+	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/readyz", s.handleReadyz)
+
+	// Core API routes.
+	mux.HandleFunc("/api/v1/", s.routeAPIv1)
+
+	s.srv = &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	return &Server{
-		cfg: cfg,
-		srv: s,
-	}
+	return s
 }
 
 // Start begins serving HTTP requests and blocks until the server stops.
