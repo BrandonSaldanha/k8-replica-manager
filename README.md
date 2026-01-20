@@ -43,14 +43,13 @@ On startup, the service will:
 - Wait for the informer cache to sync
 - Begin serving HTTP requests
 
-By default, the server listens on :8080.
 The server listens on `:8080` by default. This can be overridden using the `LISTEN_ADDR` environment variable:
 
 ```bash
 LISTEN_ADDR=:8081 make run
 ```
 
-### 2. Health and readiness checks
+### 3. Health and readiness checks
 
 Health check (process is running):
 ```bash
@@ -80,13 +79,13 @@ kubectl get deploy demo -o jsonpath='{.spec.replicas}{"\n"}'
 ### 2. List Deployments via the API
 
 ```bash
-curl -s http://localhost:8080/api/v1/deployments | jq .
+curl -s http://localhost:8080/api/v1/deployments
 ```
 
 ### 3. Get replica count from the cache
 
 ```bash
-curl -s http://localhost:8080/api/v1/deployments/demo/replicas | jq .
+curl -s http://localhost:8080/api/v1/deployments/demo/replicas
 ```
 
 ### 4. Update replica count via the API
