@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,50 +16,66 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	cfg := config.Load()
 
 	km, err := kube.NewManager(cfg.Namespace)
 	if err != nil {
-		log.Fatalf("failed to init kubernetes manager: %v", err)
+		log.Printf("failed to init kubernetes manager: %v", err)
+		return 1
 	}
+	defer km.Shutdown()
 
 	s := api.New(cfg, km)
 
-	// Run server in background
+	// Run server in background.
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- s.Start()
 	}()
 
-	// Handle shutdown signals
+	// Handle shutdown signals.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
-	var exitCode int
+	// Wait for signal or server exit.
 	select {
 	case sig := <-sigCh:
 		log.Printf("received signal %s, shutting down", sig)
+
 	case err := <-errCh:
-		// If Start() returns, server stopped. Treat non-nil as fatal.
-		if err != nil {
-			log.Printf("server error: %v", err)
-			exitCode = 1
-		} else {
+		// Start() returned before we even got a signal.
+		if err == nil || errors.Is(err, http.ErrServerClosed) {
 			log.Printf("server stopped")
+			return 0
 		}
+		log.Printf("server error: %v", err)
+		return 1
 	}
 
+	// Graceful shutdown.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Stop accepting new connections; finish in-flight requests.
 	if err := s.Shutdown(ctx); err != nil {
 		log.Printf("shutdown error: %v", err)
-		exitCode = 1
+		return 1
 	}
 
-	// Stop informers / background k8s watchers.
-	km.Shutdown()
+	// Optional: wait for Start() goroutine to exit so logs look clean.
+	select {
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("server error during shutdown: %v", err)
+			return 1
+		}
+	case <-time.After(2 * time.Second):
+		// Not fatal; shutdown already requested.
+	}
 
-	os.Exit(exitCode)
+	return 0
 }

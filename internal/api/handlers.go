@@ -3,14 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/BrandonSaldanha/k8-replica-manager/internal/kube"
 )
 
 type listDeploymentsResponse struct {
@@ -44,12 +43,12 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify k8s connectivity with a short timeout.
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	pinger, ok := s.store.(interface{ Ping(context.Context) error })
-	if ok {
+	// Ping is optional so unit tests can provide a lightweight Store implementation.
+	// Ping is optional so unit tests can provide a lightweight Store implementation.
+	if pinger, ok := s.store.(interface{ Ping(context.Context) error }); ok {
 		if err := pinger.Ping(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
@@ -66,9 +65,7 @@ func (s *Server) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stable ordering helps tests and makes the API nicer to consume.
 	sort.Strings(deps)
-
 	writeJSON(w, http.StatusOK, listDeploymentsResponse{Deployments: deps})
 }
 
@@ -90,7 +87,13 @@ func (s *Server) handleSetReplicas(w http.ResponseWriter, r *http.Request, name 
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
+
 	if err := dec.Decode(&req); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	// Ensure there's no trailing junk after the first JSON object.
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		http.Error(w, "invalid json body", http.StatusBadRequest)
 		return
 	}
@@ -113,9 +116,6 @@ func (s *Server) handleSetReplicas(w http.ResponseWriter, r *http.Request, name 
 }
 
 func (s *Server) routeAPIv1(w http.ResponseWriter, r *http.Request) {
-	// Expected:
-	// /api/v1/deployments
-	// /api/v1/deployments/{name}/replicas
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
 	if path == "/deployments" || path == "/deployments/" {
 		if r.Method != http.MethodGet {
@@ -126,7 +126,6 @@ func (s *Server) routeAPIv1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /deployments/{name}/replicas
 	const prefix = "/deployments/"
 	if !strings.HasPrefix(path, prefix) {
 		http.NotFound(w, r)
@@ -138,6 +137,7 @@ func (s *Server) routeAPIv1(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
 	name := parts[0]
 	if name == "" {
 		http.NotFound(w, r)
@@ -153,6 +153,3 @@ func (s *Server) routeAPIv1(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
-
-// Make sure Server satisfies "uses Store".
-var _ kube.Store = (kube.Store)(nil)

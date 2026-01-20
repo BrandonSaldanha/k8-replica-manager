@@ -25,9 +25,10 @@ type Manager struct {
 	client    kubernetes.Interface
 
 	// informer lifecycle
-	factory informers.SharedInformerFactory
-	synced  cache.InformerSynced
-	stopCh  chan struct{}
+	factory  informers.SharedInformerFactory
+	synced   cache.InformerSynced
+	stopCh   chan struct{}
+	stopOnce sync.Once
 
 	// cache
 	mu       sync.RWMutex
@@ -55,7 +56,7 @@ func NewManager(namespace string) (*Manager, error) {
 		return nil, fmt.Errorf("create kubernetes client: %w", err)
 	}
 
-	// Shared informer scoped to namespace.
+	// Shared informer scoped to a namespace.
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		client,
 		30*time.Second,
@@ -83,27 +84,29 @@ func NewManager(namespace string) (*Manager, error) {
 		return nil, fmt.Errorf("add informer handler: %w", err)
 	}
 
-	// Start informers
+	// Start informers.
 	factory.Start(m.stopCh)
 
 	// Wait for initial sync in background; mark ready when synced.
 	go func() {
 		if ok := cache.WaitForCacheSync(m.stopCh, m.synced); !ok {
-			log.Printf("kube cache sync did not complete")
+			log.Printf("kube cache sync did not complete (namespace=%s)", m.namespace)
 			return
 		}
 		m.readyMu.Lock()
 		m.ready = true
 		m.readyMu.Unlock()
-		log.Printf("kube cache synced for namespace=%s", m.namespace)
+		log.Printf("kube cache synced (namespace=%s)", m.namespace)
 	}()
 
 	return m, nil
 }
 
-// Shutdown stops informers.
+// Shutdown stops informers (safe to call multiple times).
 func (m *Manager) Shutdown() {
-	close(m.stopCh)
+	m.stopOnce.Do(func() {
+		close(m.stopCh)
+	})
 }
 
 // Ready returns true once the informer cache has synced at least once.
@@ -113,8 +116,8 @@ func (m *Manager) Ready() bool {
 	return m.ready
 }
 
+// ListDeployments returns cached deployment names.
 func (m *Manager) ListDeployments(ctx context.Context) ([]string, error) {
-	// No cluster calls; return keys from cache.
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -125,13 +128,16 @@ func (m *Manager) ListDeployments(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
+// GetReplicas returns cached desired replicas for the given deployment name.
 func (m *Manager) GetReplicas(ctx context.Context, name string) (int32, bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	v, ok := m.replicas[name]
 	return v, ok, nil
 }
 
+// SetReplicas updates desired replicas in Kubernetes (cache updates asynchronously via informer).
 func (m *Manager) SetReplicas(ctx context.Context, name string, replicas int32) error {
 	if replicas < 0 {
 		return fmt.Errorf("replicas must be >= 0")
@@ -153,9 +159,8 @@ func (m *Manager) SetReplicas(ctx context.Context, name string, replicas int32) 
 	return nil
 }
 
-// Ping is used for readiness checks to verify Kubernetes API connectivity.
+// Ping verifies Kubernetes API connectivity.
 func (m *Manager) Ping(ctx context.Context) error {
-	// Lightweight call: list deployments with limit 1.
 	_, err := m.client.AppsV1().Deployments(m.namespace).List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		return fmt.Errorf("kubernetes connectivity check failed: %w", err)
@@ -169,7 +174,7 @@ func (m *Manager) onAddOrUpdate(obj any) {
 		return
 	}
 
-	var rep int32 = 0
+	var rep int32
 	if d.Spec.Replicas != nil {
 		rep = *d.Spec.Replicas
 	}
@@ -183,8 +188,7 @@ func (m *Manager) onDelete(obj any) {
 	// Delete events can come as Deployment or as tombstone.
 	d, ok := obj.(*appsv1.Deployment)
 	if !ok {
-		t, ok2 := obj.(cache.DeletedFinalStateUnknown)
-		if ok2 {
+		if t, ok2 := obj.(cache.DeletedFinalStateUnknown); ok2 {
 			d, _ = t.Obj.(*appsv1.Deployment)
 		}
 	}
@@ -199,12 +203,12 @@ func (m *Manager) onDelete(obj any) {
 
 // buildRESTConfig tries in-cluster config first, then falls back to local kubeconfig.
 func buildRESTConfig() (*rest.Config, error) {
-	// In-cluster (when running in Kubernetes)
+	// In-cluster (when running in Kubernetes).
 	if cfg, err := rest.InClusterConfig(); err == nil {
 		return cfg, nil
 	}
 
-	// Local kubeconfig for dev
+	// Local kubeconfig for dev.
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
 		home, _ := os.UserHomeDir()

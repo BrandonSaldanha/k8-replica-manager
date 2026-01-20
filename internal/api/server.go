@@ -14,8 +14,8 @@ import (
 
 // Server wraps an HTTP server and exposes lifecycle helpers for starting and shutting down.
 type Server struct {
-	cfg config.Config
-	srv *http.Server
+	cfg   config.Config
+	srv   *http.Server
 	store kube.Store
 }
 
@@ -39,6 +39,9 @@ func New(cfg config.Config, store kube.Store) *Server {
 		Addr:              cfg.ListenAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	return s
@@ -65,5 +68,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		// Can't reliably change the status code here since headers may already be written.
+		log.Printf("write json response: %v", err)
+	}
 }
