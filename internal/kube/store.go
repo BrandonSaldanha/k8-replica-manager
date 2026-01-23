@@ -8,9 +8,6 @@ type Store interface {
 	// Ready reports whether the cache has synced at least once and the store is usable.
 	Ready() bool
 
-	// Ping verifies Kubernetes API connectivity. Used by readiness checks.
-	Ping(ctx context.Context) error
-
 	// ListDeployments returns cached deployment names.
 	ListDeployments(ctx context.Context) ([]string, error)
 
@@ -19,4 +16,9 @@ type Store interface {
 
 	// SetReplicas updates desired replicas in Kubernetes (cache updates asynchronously via informer).
 	SetReplicas(ctx context.Context, name string, replicas int32) error
+}
+
+// Pinger is optional. Production kube store implements it; test fakes may not.
+type Pinger interface {
+	Ping(ctx context.Context) error
 }

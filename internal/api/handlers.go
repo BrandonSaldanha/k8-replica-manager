@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BrandonSaldanha/k8-replica-manager/internal/kube"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -22,7 +23,7 @@ type getReplicasResponse struct {
 }
 
 type setReplicasRequest struct {
-	Replicas int32 `json:"replicas"`
+	Replicas *int32 `json:"replicas"`
 }
 
 type statusResponse struct {
@@ -47,13 +48,12 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Ping is optional so unit tests can provide a lightweight Store implementation.
-	if pinger, ok := s.store.(interface{ Ping(context.Context) error }); ok {
+	if pinger, ok := s.store.(kube.Pinger); ok {
 		if err := pinger.Ping(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 	}
-
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ready"})
 }
 
@@ -84,6 +84,7 @@ func (s *Server) handleGetReplicas(w http.ResponseWriter, r *http.Request, name 
 func (s *Server) handleSetReplicas(w http.ResponseWriter, r *http.Request, name string) {
 	var req setReplicasRequest
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
@@ -97,12 +98,17 @@ func (s *Server) handleSetReplicas(w http.ResponseWriter, r *http.Request, name 
 		return
 	}
 
-	if req.Replicas < 0 {
+	if req.Replicas == nil {
+		http.Error(w, "replicas is required", http.StatusBadRequest)
+		return
+	}
+
+	if *req.Replicas < 0 {
 		http.Error(w, "replicas must be >= 0", http.StatusBadRequest)
 		return
 	}
 
-	if err := s.store.SetReplicas(r.Context(), name, req.Replicas); err != nil {
+	if err := s.store.SetReplicas(r.Context(), name, *req.Replicas); err != nil {
 		if apierrors.IsNotFound(err) {
 			http.Error(w, "deployment not found", http.StatusNotFound)
 			return
@@ -115,6 +121,18 @@ func (s *Server) handleSetReplicas(w http.ResponseWriter, r *http.Request, name 
 }
 
 func (s *Server) routeAPIv1(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		http.Error(w, "store not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if !s.store.Ready() {
+		w.Header().Set("Retry-After", "1")
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"error": "cache not synced",
+		})
+		return
+	}
+
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
 	if path == "/deployments" || path == "/deployments/" {
 		if r.Method != http.MethodGet {

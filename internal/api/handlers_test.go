@@ -43,7 +43,6 @@ func (f *fakeStore) SetReplicas(ctx context.Context, name string, replicas int32
 	return nil
 }
 
-
 var _ kube.Store = (*fakeStore)(nil)
 
 func TestHealthzOK(t *testing.T) {
@@ -72,7 +71,6 @@ func TestReadyzOK(t *testing.T) {
 		t.Fatalf("expected 200, got %d (%s)", rr.Code, rr.Body.String())
 	}
 }
-
 
 func TestSetReplicasRejectsNegative(t *testing.T) {
 	s := New(config.Config{ListenAddr: ":0"}, &fakeStore{ready: true, replicas: map[string]int32{"frontend": 1}})

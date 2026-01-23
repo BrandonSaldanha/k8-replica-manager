@@ -31,13 +31,17 @@ type Manager struct {
 	stopOnce sync.Once
 
 	// cache
-	mu       sync.RWMutex
+	mu       sync.Mutex
 	replicas map[string]int32
 
 	// readiness
-	readyMu sync.RWMutex
+	readyMu sync.Mutex
 	ready   bool
 }
+
+// Compile-time interface checks.
+var _ Store = (*Manager)(nil)
+var _ Pinger = (*Manager)(nil)
 
 // NewManager constructs a Manager and starts the Deployment informer in the background.
 // Call Shutdown() to stop the informer.
@@ -111,15 +115,15 @@ func (m *Manager) Shutdown() {
 
 // Ready returns true once the informer cache has synced at least once.
 func (m *Manager) Ready() bool {
-	m.readyMu.RLock()
-	defer m.readyMu.RUnlock()
+	m.readyMu.Lock()
+	defer m.readyMu.Unlock()
 	return m.ready
 }
 
 // ListDeployments returns cached deployment names.
 func (m *Manager) ListDeployments(ctx context.Context) ([]string, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	out := make([]string, 0, len(m.replicas))
 	for name := range m.replicas {
@@ -130,8 +134,8 @@ func (m *Manager) ListDeployments(ctx context.Context) ([]string, error) {
 
 // GetReplicas returns cached desired replicas for the given deployment name.
 func (m *Manager) GetReplicas(ctx context.Context, name string) (int32, bool, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	v, ok := m.replicas[name]
 	return v, ok, nil
