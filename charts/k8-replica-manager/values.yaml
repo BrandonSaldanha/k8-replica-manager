@@ -1,0 +1,44 @@
+replicaCount: 1
+
+image:
+  repository: k8-replica-manager
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  apiPort: 8080
+  probePort: 8081
+
+tls:
+  enabled: true
+  # If you want to bring-your-own secret, set existingSecret and leave createSecret=false
+  createSecret: true
+  existingSecret: ""
+  mountPath: /etc/replica-manager/tls
+  serverCrtKey: server.crt
+  serverKeyKey: server.key
+  clientCAKey: ca.crt
+
+  # Only used when createSecret=true (base64 NOT needed here; Helm will do it)
+  serverCrt: ""
+  serverKey: ""
+  clientCA: ""
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod-level security context (applies to the whole pod)
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+
+# Container-level security context (applies to the container)
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

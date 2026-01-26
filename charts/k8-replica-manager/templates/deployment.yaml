@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "k8-replica-manager.fullname" . }}
+  labels:
+    {{- include "k8-replica-manager.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "k8-replica-manager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "k8-replica-manager.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "k8-replica-manager.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 10
+
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+
+      containers:
+        - name: server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+
+          ports:
+            - name: api
+              containerPort: {{ .Values.service.apiPort }}
+            - name: probe
+              containerPort: {{ .Values.service.probePort }}
+
+          # Non-secret config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: {{ include "k8-replica-manager.fullname" . }}
+
+          # Dynamic namespace from the Pod
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+            # TLS file paths (these are not secrets; the Secret is mounted as files)
+            - name: TLS_CERT_FILE
+              value: "{{ .Values.tls.mountPath }}/{{ .Values.tls.serverCrtKey }}"
+            - name: TLS_KEY_FILE
+              value: "{{ .Values.tls.mountPath }}/{{ .Values.tls.serverKeyKey }}"
+            - name: TLS_CLIENT_CA_FILE
+              value: "{{ .Values.tls.mountPath }}/{{ .Values.tls.clientCAKey }}"
+
+          {{- if .Values.tls.enabled }}
+          volumeMounts:
+            - name: tls
+              mountPath: {{ .Values.tls.mountPath | quote }}
+              readOnly: true
+          {{- end }}
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probe
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probe
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+      {{- if .Values.tls.enabled }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ include "k8-replica-manager.tlsSecretName" . }}
+      {{- end }}

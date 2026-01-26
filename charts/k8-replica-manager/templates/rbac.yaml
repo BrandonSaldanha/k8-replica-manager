@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "k8-replica-manager.fullname" . }}
+  labels:
+    {{- include "k8-replica-manager.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "k8-replica-manager.fullname" . }}
+  labels:
+    {{- include "k8-replica-manager.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8-replica-manager.serviceAccountName" . }}
+roleRef:
+  kind: Role
+  name: {{ include "k8-replica-manager.fullname" . }}
+  apiGroup: rbac.authorization.k8s.io

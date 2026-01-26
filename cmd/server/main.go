@@ -20,7 +20,11 @@ func main() {
 }
 
 func run() int {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("load config: %v", err)
+		return 1
+	}
 
 	km, err := kube.NewManager(cfg.Namespace)
 	if err != nil {
