@@ -44,13 +44,14 @@ func (f *fakeStore) SetReplicas(ctx context.Context, name string, replicas int32
 }
 
 var _ kube.Store = (*fakeStore)(nil)
+var _ kube.Pinger = (*fakeStore)(nil)
 
 func TestHealthzOK(t *testing.T) {
-	s := New(config.Config{ListenAddr: ":0"}, &fakeStore{ready: true})
+	s := New(config.Config{ListenAddr: ":0", ProbeListenAddr: ":0"}, &fakeStore{ready: true})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rr := httptest.NewRecorder()
 
-	s.srv.Handler.ServeHTTP(rr, req)
+	s.handleHealthz(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
@@ -61,11 +62,11 @@ func TestHealthzOK(t *testing.T) {
 }
 
 func TestReadyzOK(t *testing.T) {
-	s := New(config.Config{ListenAddr: ":0"}, &fakeStore{ready: true})
+	s := New(config.Config{ListenAddr: ":0", ProbeListenAddr: ":0"}, &fakeStore{ready: true})
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rr := httptest.NewRecorder()
 
-	s.srv.Handler.ServeHTTP(rr, req)
+	s.handleReadyz(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d (%s)", rr.Code, rr.Body.String())
@@ -73,11 +74,11 @@ func TestReadyzOK(t *testing.T) {
 }
 
 func TestSetReplicasRejectsNegative(t *testing.T) {
-	s := New(config.Config{ListenAddr: ":0"}, &fakeStore{ready: true, replicas: map[string]int32{"frontend": 1}})
+	s := New(config.Config{ListenAddr: ":0", ProbeListenAddr: ":0"}, &fakeStore{ready: true, replicas: map[string]int32{"frontend": 1}})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/deployments/frontend/replicas", strings.NewReader(`{"replicas":-1}`))
 	rr := httptest.NewRecorder()
 
-	s.srv.Handler.ServeHTTP(rr, req)
+	s.routeAPIv1(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d (%s)", rr.Code, rr.Body.String())

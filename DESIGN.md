@@ -18,7 +18,9 @@ In Scope:
 - HTTP API server implemented in Go
 - Listing, retrieval, and modification of Kubernetes Deployment replica counts
 - Informer-based caching of replica counts
-- Health check endpoint verifying Kubernetes connectivity
+- Health and readiness endpoints for Kubernetes probes
+  - /healthz: process-level liveness
+  - /readyz: readiness based on cache sync and Kubernetes connectivity
 - Mutual TLS authentication between clients and the API server
 - Helm chart including Deployment, ServiceAccount, and Service resources
 - Build, test, and deployment automation via Makefile
@@ -102,7 +104,15 @@ Response (200):
 
 GET /healthz
 
-Checks Kubernetes client connectivity by performing a lightweight API call
+Process-level liveness check. Returns success as long as the server is running.
+This endpoint does not perform Kubernetes API calls and is intended for use
+by Kubernetes liveness probes.
+
+GET /readyz
+
+Readiness check that verifies the informer cache has completed its initial
+sync and (optionally) that Kubernetes API connectivity is available. This
+endpoint is intended for use by Kubernetes readiness probes.
 
 ## 5. Replica Cache & Pod Lifecycle Considerations
 ### 5.1 Informer-based Caching
@@ -266,7 +276,9 @@ The test flow includes:
   - Listing available Deployments
   - Reading replica counts from the cache
   - Updating replica counts and observing informer-synchronized state
-  - Validating the health check endpoint
+  - Validating liveness and readiness endpoints
+    - /healthz responds without authentication
+    - /readyz reflects cache sync and Kubernetes connectivity
 
 ## 11. Conclusion
 
